@@ -18,108 +18,15 @@ env:
   CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
   STAGING_REPOSITORY: ${{ secrets.STAGING_REPOSITORY }}
 jobs:
-  android-arm:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  android-arm64:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  android-x86:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  android-x86_64:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  linux-armhf:
-    runs-on: ubuntu-20.04
-    container: ubuntu:bionic
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-ubuntu@actions
-  linux-arm64:
-    runs-on: ubuntu-20.04
-    container: ubuntu:bionic
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-ubuntu@actions
-  linux-ppc64le:
-    runs-on: ubuntu-20.04
-    container: ubuntu:bionic
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-ubuntu@actions
-  linux-x86:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  linux-x86_64:
-    runs-on: ubuntu-20.04
-    container: centos:7
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-centos@actions
-  macosx-arm64:
-    runs-on: macos-11
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-macosx@actions
-  macosx-x86_64:
-    runs-on: macos-11
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-macosx@actions
-  windows-x86:
-    runs-on: windows-2019
-    strategy:
-      matrix:
-        ext: ["", -gpl]
-    steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-windows@actions
   windows-x86_64:
-    runs-on: windows-2019
+    runs-on: windows-2022
     strategy:
       matrix:
         ext: ["", -gpl]
     steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/deploy-windows@actions
+      - uses: icyllite/javacpp-presets/.github/actions/deploy-windows@ffmpeg-1.5.8
   redeploy:
-    needs: [android-arm, android-arm64, android-x86, android-x86_64, linux-armhf, linux-arm64, linux-ppc64le, linux-x86, linux-x86_64, macosx-arm64, macosx-x86_64, windows-x86, windows-x86_64]
-    runs-on: ubuntu-20.04
+    needs: [windows-x86_64]
+    runs-on: ubuntu-latest
     steps:
-      - uses: bytedeco/javacpp-presets/.github/actions/redeploy@actions
+      - uses: icyllite/javacpp-presets/.github/actions/redeploy@ffmpeg-1.5.8
