@@ -24,7 +24,7 @@ SRT_CONFIG="-DENABLE_APPS:BOOL=OFF -DENABLE_ENCRYPTION:BOOL=ON -DENABLE_SHARED:B
 WEBP_CONFIG="-DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_EXTRAS=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_WEBP_JS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib"
 
 NASM_VERSION=2.14
-ZLIB=zlib-1.2.13
+ZLIB=1.3.2
 LAME=lame-3.100
 SPEEX=speex-1.2.1
 OPUS=opus-1.3.1
@@ -44,7 +44,7 @@ LIBSRT_VERSION=1.5.0
 WEBP_VERSION=1.2.4
 FFMPEG_VERSION=5.1.2
 download https://download.videolan.org/contrib/nasm/nasm-$NASM_VERSION.tar.gz nasm-$NASM_VERSION.tar.gz
-download http://zlib.net/$ZLIB.tar.gz $ZLIB.tar.gz
+download https://github.com/madler/zlib/releases/download/v$ZLIB/zlib-$ZLIB.tar.gz zlib-$ZLIB.tar.gz
 download http://downloads.sourceforge.net/project/lame/lame/3.100/$LAME.tar.gz $LAME.tar.gz
 download https://ftp.osuosl.org/pub/xiph/releases/speex/$SPEEX.tar.gz $SPEEX.tar.gz
 download https://archive.mozilla.org/pub/opus/$OPUS.tar.gz $OPUS.tar.gz
@@ -69,7 +69,7 @@ cd $PLATFORM$EXTENSION
 INSTALL_PATH=`pwd`
 echo "Decompressing archives..."
 tar --totals -xzf ../nasm-$NASM_VERSION.tar.gz
-tar --totals -xzf ../$ZLIB.tar.gz
+tar --totals -xzf ../zlib-$ZLIB.tar.gz
 tar --totals -xzf ../$LAME.tar.gz
 tar --totals -xzf ../$SPEEX.tar.gz
 tar --totals -xzf ../$OPUS.tar.gz
@@ -122,7 +122,7 @@ case $PLATFORM in
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         ./configure --prefix=$INSTALL_PATH --static --uname=arm-linux
         make -j $MAKEJ V=0
         make install
@@ -254,7 +254,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         ./configure --prefix=$INSTALL_PATH --static --uname=aarch64-linux
         make -j $MAKEJ V=0
         make install
@@ -385,7 +385,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         ./configure --prefix=$INSTALL_PATH --static --uname=i686-linux
         make -j $MAKEJ V=0
         make install
@@ -513,7 +513,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         ./configure --prefix=$INSTALL_PATH --static --uname=x86_64-linux
         make -j $MAKEJ V=0
         make install
@@ -636,7 +636,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="gcc -m32 -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -761,7 +761,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="gcc -m64 -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -900,7 +900,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="arm-linux-gnueabihf-gcc -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -1074,7 +1074,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="aarch64-linux-gnu-gcc -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -1197,7 +1197,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         if [[ "$MACHINE_TYPE" =~ ppc64 ]]; then
           CC="gcc -m64 -fPIC" ./configure --prefix=$INSTALL_PATH --static
         else
@@ -1390,7 +1390,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="clang -arch arm64 -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -1501,7 +1501,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         CC="clang -fPIC" ./configure --prefix=$INSTALL_PATH --static
         make -j $MAKEJ V=0
         make install
@@ -1610,7 +1610,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         make -j $MAKEJ install -fwin32/Makefile.gcc BINARY_PATH=$INSTALL_PATH/bin/ INCLUDE_PATH=$INSTALL_PATH/include/ LIBRARY_PATH=$INSTALL_PATH/lib/
         echo ""
         echo "--------------------"
@@ -1727,7 +1727,7 @@ EOF
         echo "Building zlib"
         echo "--------------------"
         echo ""
-        cd $ZLIB
+        cd zlib-$ZLIB
         make -j $MAKEJ install -fwin32/Makefile.gcc BINARY_PATH=$INSTALL_PATH/bin/ INCLUDE_PATH=$INSTALL_PATH/include/ LIBRARY_PATH=$INSTALL_PATH/lib/
         echo ""
         echo "--------------------"
