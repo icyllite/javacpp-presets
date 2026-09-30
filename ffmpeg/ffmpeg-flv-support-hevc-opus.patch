@@ -84,12 +84,16 @@ diff -ruN ffmpeg-5.1.1/libavformat/flvdec.c ffmpeg-5.1.1-patch/libavformat/flvde
          int type = avio_r8(s->pb);
          size--;
  
-@@ -1249,7 +1269,7 @@
+@@ -1249,11 +1269,11 @@
              goto leave;
          }
  
 -        if (st->codecpar->codec_id == AV_CODEC_ID_H264 || st->codecpar->codec_id == AV_CODEC_ID_MPEG4) {
 +        if (st->codecpar->codec_id == AV_CODEC_ID_H264 || st->codecpar->codec_id == AV_CODEC_ID_MPEG4 || st->codecpar->codec_id == AV_CODEC_ID_HEVC) {
+             if (size < 3) {
+                 ret = AVERROR_INVALIDDATA;
+                 goto leave;
+             }
              // sign extension
              int32_t cts = (avio_rb24(s->pb) + 0xff800000) ^ 0xff800000;
              pts = av_sat_add64(dts, cts);

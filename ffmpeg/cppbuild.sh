@@ -42,7 +42,7 @@ NVCODEC_VERSION=11.1.5.1
 XML2=libxml2-2.9.12
 LIBSRT_VERSION=1.5.0
 WEBP_VERSION=1.2.4
-FFMPEG_VERSION=5.1.2
+FFMPEG_VERSION=5.1.10
 download https://download.videolan.org/contrib/nasm/nasm-$NASM_VERSION.tar.gz nasm-$NASM_VERSION.tar.gz
 download https://github.com/madler/zlib/releases/download/v$ZLIB/zlib-$ZLIB.tar.gz zlib-$ZLIB.tar.gz
 download http://downloads.sourceforge.net/project/lame/lame/3.100/$LAME.tar.gz $LAME.tar.gz
