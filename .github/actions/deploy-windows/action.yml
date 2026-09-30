@@ -164,19 +164,6 @@ runs:
 
         set GRADLE_TASK=publishToMavenLocal
         set MAVEN_PHASE=install
-        set "MESSAGE=${{ github.event.head_commit.message }}"
-        if "%MESSAGE:~0,7%"=="Release" set DEPLOY=RELEASE
-        if "%GITHUB_REF:~11%"=="release" set DEPLOY=RELEASE
-        if not "%CI_DEPLOY_USERNAME%"=="" if not "%GITHUB_EVENT_NAME%"=="pull_request" (
-          set GRADLE_TASK=publish
-          set MAVEN_PHASE=deploy
-          if "%DEPLOY%"=="RELEASE" (
-            python -m gdown.cli -q -O settings.tar.gz https://drive.google.com/uc?id=%CI_DEPLOY_SETTINGS%
-            bash -c "tar -xzf settings.tar.gz -C $HOME"
-            set "MAVEN_OPTIONS=%MAVEN_OPTIONS% -DperformRelease -DstagingRepositoryId=%STAGING_REPOSITORY%"
-          )
-        )
-        echo GPG_PASSPHRASE=*** >> %GITHUB_ENV%
         echo GRADLE_TASK=%GRADLE_TASK% >> %GITHUB_ENV%
         echo MAVEN_PHASE=%MAVEN_PHASE% >> %GITHUB_ENV%
         echo MAVEN_OPTIONS=%MAVEN_OPTIONS% >> %GITHUB_ENV%
@@ -298,3 +285,10 @@ runs:
         cd /d %USERPROFILE%
         set "PATH=C:\msys64\usr\bin;%PATH%"
         bash -c "rm -Rf $(find .m2/repository/ -name '*SNAPSHOT*')"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.CI_DEPLOY_MODULE }}-${{ env.CI_DEPLOY_PLATFORM }}${{ matrix.ext }}
+        path: ${{ env.USERPROFILE }}\.m2\repository\org\bytedeco\
+        retention-days: 5

@@ -36,6 +36,24 @@ runs:
 #        cd $HOME
 #        node cache.ts restore
 
+    - name: Download Windows artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: /tmp/windows-artifacts
+
+    - name: Install Windows artifacts into local Maven repository
+      shell: bash
+      run: |
+        if ls /tmp/windows-artifacts/$CI_DEPLOY_MODULE-windows-*/ > /dev/null 2>&1; then
+          mkdir -p $HOME/.m2/repository/org/bytedeco
+          for dir in /tmp/windows-artifacts/$CI_DEPLOY_MODULE-windows-*/; do
+            echo "Merging artifact: $dir"
+            rsync -av "$dir/" $HOME/.m2/repository/org/bytedeco/
+          done
+        else
+          echo "No Windows artifacts found for $CI_DEPLOY_MODULE, skipping"
+        fi
+
     - name: Downloading and uploading artifacts
       shell: bash
       run: |
