@@ -1,0 +1,50 @@
+/*
+ * Copyright (C) 2015-2025 Samuel Audet
+ *
+ * Licensed either under the Apache License, Version 2.0, or (at your option)
+ * under the terms of the GNU General Public License as published by
+ * the Free Software Foundation (subject to the "Classpath" exception),
+ * either version 2, or any later version (collectively, the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.gnu.org/licenses/
+ *     http://www.gnu.org/software/classpath/license.html
+ *
+ * or as provided in the LICENSE.txt file that accompanied this code.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.bytedeco.cuda.presets;
+
+import org.bytedeco.javacpp.annotation.NoException;
+import org.bytedeco.javacpp.annotation.Platform;
+import org.bytedeco.javacpp.annotation.Properties;
+import org.bytedeco.javacpp.tools.Info;
+import org.bytedeco.javacpp.tools.InfoMap;
+import org.bytedeco.javacpp.tools.InfoMapper;
+
+/**
+ *
+ * @author Samuel Audet
+ */
+@Properties(inherit = nppc.class, value = {
+    @Platform(include = "<nppi_color_conversion.h>", link = "nppicc@.13"),
+    @Platform(value = "windows-x86_64", preload = "nppicc64_13")},
+        /* target = "org.bytedeco.cuda.nppicc", */ global = "org.bytedeco.cuda.global.nppicc")
+@NoException
+public class nppicc implements InfoMapper {
+    public void map(InfoMap infoMap) {
+        nppc.initSkips(infoMap, "nppi_color_conversion.h");
+        infoMap.put(new Info("nppiUYVP_10u_ToRGB_16u_C3P3R_Ctx", "nppiUYVP_10u_ToRGB_8u_C3AC4R_Ctx", "nppiRGB_8u_ToUYVP_10u_C3P3R_Ctx", "nppiUYVP_10u_ToRGB_8u_C3P3R_Ctx",
+                             "nppiHLSToBGR_8u_AC4R", "nppiUYVP_10u_ToYUV444_8u_C3C3R_Ctx", "nppiYUV444_8u_ToUYVP_10u_C3C3R_Ctx", "nppiUYVP_10u_ToNV16_8u_C3P2R_Ctx",
+                             "nppiUYVP_10u_ToY410_10u_C3C3R_Ctx", "nppiUYVP_10u_ToV210_10u_C3C3R_Ctx", "nppiUYVP_10u_ToP208_8u_C3C3R_Ctx", "nppiP208_8u_ToUYVP_10u_C3C3R_Ctx",
+                             "nppiNV12_8u_ToUYVP_10u_P2C3R_Ctx", "nppiV210_10u_ToUYVP_10u_C3C3R_Ctx", "nppiP010_16u_ToUYVP_10u_P3C3R_Ctx", "nppiI444_8u_ToUYVP_10u_P3C3R_Ctx",
+                             "nppiNV16_8u_ToUYVP_10u_P2C3R_Ctx", "nppiP210_16u_ToUYVP_10u_P2C3R_Ctx", "nppiY410_10u_ToUYVP_10u_C3C3R_Ctx", "nppiUYVP_10u_ToI444_8u_C3P3R_Ctx").skip());
+    }
+}

@@ -1,0 +1,163 @@
+# Redeploys in one shot main and secondary artifacts to get consistent timestamps among them as required by Gradle, sbt, etc
+name: Redeploy on Linux
+runs:
+  using: composite
+  steps:
+#    - name: Install environment
+#      shell: bash
+#      run: |
+#        cd $HOME
+#
+#        echo ACTIONS_RUNTIME_URL=$ACTIONS_RUNTIME_URL
+#        echo ACTIONS_RUNTIME_TOKEN=$ACTIONS_RUNTIME_TOKEN
+#        echo ACTIONS_CACHE_URL=$ACTIONS_CACHE_URL
+#        curl -LO https://nodejs.org/dist/v10.23.0/node-v10.23.0-linux-x64.tar.xz
+#        tar --totals -xf node-v10.23.0-linux-x64.tar.xz
+#        export PATH=$HOME/node-v10.23.0-linux-x64/bin:$PATH
+#        echo "PATH=$PATH" >> $GITHUB_ENV
+#        npm install @actions/cache
+#
+#        CACHE_PATH="$HOME/.m2/repository"
+#        CACHE_KEY="${{ runner.os }}"
+#
+#        echo "cache = require('@actions/cache');"          > cache.ts
+#        echo "paths = ['$CACHE_PATH'];"                   >> cache.ts
+#        echo "key = '$CACHE_KEY';"                        >> cache.ts
+#        echo "switch (process.argv[2]) {"                 >> cache.ts
+#        echo "case 'restore':"                            >> cache.ts
+#        echo "    cache.restoreCache(paths, key); break;" >> cache.ts
+#        echo "case 'save':"                               >> cache.ts
+#        echo "    cache.saveCache(paths, key); break;"    >> cache.ts
+#        echo "}"                                          >> cache.ts
+#
+#    - name: Restore cache
+#      shell: bash
+#      run: |
+#        cd $HOME
+#        node cache.ts restore
+
+    - name: Downloading and uploading artifacts
+      shell: bash
+      env:
+        GITHUB_EVENT_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        FILE: ${{ matrix.file }}
+      run: |
+        if [[ -z ${CI_DEPLOY_USERNAME:-} ]] || [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            # We are not deploying
+            exit 0
+        fi
+
+        curl -LO https://repo1.maven.org/maven2/org/apache/maven/apache-maven/3.9.6/apache-maven-3.9.6-bin.tar.gz
+        sudo tar -xzf apache-maven-3.9.6-bin.tar.gz -C /opt/
+        sudo ln -sf /opt/apache-maven-3.9.6/bin/mvn /usr/bin/mvn
+
+        sudo python3 -m pip install gdown || sudo python3 -m pip install --break-system-packages gdown
+
+        git --version
+        mvn -version
+        df -h
+
+        echo Fetching $GITHUB_REPOSITORY@$GITHUB_SHA
+        git init
+        git fetch --depth 1 https://github.com/$GITHUB_REPOSITORY $GITHUB_SHA
+        git checkout $GITHUB_SHA
+
+        mkdir -p $HOME/.m2
+        echo "<settings><servers>" > $HOME/.m2/settings.xml
+        echo "<server><id>central</id><username>$CI_DEPLOY_USERNAME</username><password>$CI_DEPLOY_PASSWORD</password></server>" >> $HOME/.m2/settings.xml
+        echo "<server><id>central-portal-staging</id><configuration><httpHeaders><property><name>Authorization</name>" >> $HOME/.m2/settings.xml
+        echo "<value>Bearer $(echo $CI_DEPLOY_USERNAME:$CI_DEPLOY_PASSWORD | base64)</value></property></httpHeaders></configuration></server>" >> $HOME/.m2/settings.xml
+        echo "</servers></settings>" >> $HOME/.m2/settings.xml
+
+        REPOSITORY_ID="central"
+        REPOSITORY_URL="https://central.sonatype.com/repository/maven-snapshots/"
+        DEPLOY_OPTIONS="-DaltDeploymentRepository=$REPOSITORY_ID::default::$REPOSITORY_URL"
+        DEPLOY_FILE_OPTIONS="deploy:deploy-file -DrepositoryId=$REPOSITORY_ID -Durl=$REPOSITORY_URL"
+        MAVEN_OPTIONS="-N -B -U -e -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.count=3 -Dmaven.test.skip"
+        UPLOAD_URL=
+        if [[ "$GITHUB_EVENT_HEAD_COMMIT_MESSAGE" == Release* ]] || [[ "${GITHUB_REF#refs/heads/}" == "release" ]]; then
+            python3 -m gdown -q -O settings.tar.gz $CI_DEPLOY_SETTINGS
+            tar -xzf settings.tar.gz
+            export GPG_PASSPHRASE=***
+            DEPLOY_OPTIONS="-DaltDeploymentRepository=local::default::file://$(pwd)/redeploy"
+            DEPLOY_FILE_OPTIONS="gpg:sign-and-deploy-file -DrepositoryId=local -Durl=file://$(pwd)/redeploy"
+            MAVEN_OPTIONS="$MAVEN_OPTIONS -Dgpg.homedir=$(pwd)/.gnupg/ -Dgpg.passphrase=$GPG_PASSPHRASE -Dgpg.useagent=false -DperformRelease"
+            UPLOAD_URL="https://central.sonatype.com/api/v1/publisher/upload"
+        fi
+
+        rm -f dependencies.txt
+        readarray POMS <<< "$(find $CI_DEPLOY_MODULE/platform/$FILE -name pom.xml)";
+        while [[ ${#POMS[@]} > 0 ]]; do
+            POM=${POMS[0]}
+            unset POMS[0]
+            POMS=(${POMS[@]})
+            if ! mvn compile $MAVEN_OPTIONS -f $POM; then
+                POMS+=($POM)
+                continue # Missing dependencies, try again later
+            fi
+            if [[ $POM =~ tensorflow/platform/python ]]; then
+                continue # Skip over builds taking more than 6 hours on GitHub Actions
+            fi
+            for i in {1..5}; do
+                STATUS=0
+                mvn dependency:list $MAVEN_OPTIONS -DexcludeTransitive -DappendOutput -DoutputFile=$(pwd)/dependencies.txt -f $POM \
+                    && mvn dependency:resolve -Dclassifier=javadoc $MAVEN_OPTIONS -DexcludeTransitive -DappendOutput -DoutputFile=$(pwd)/dependencies.txt -f $POM \
+                    && mvn dependency:resolve -Dclassifier=sources $MAVEN_OPTIONS -DexcludeTransitive -DappendOutput -DoutputFile=$(pwd)/dependencies.txt -f $POM \
+                    && mvn clean deploy $DEPLOY_OPTIONS $MAVEN_OPTIONS -f $POM \
+                    && break || STATUS=$? && sleep 60
+            done
+            (exit $STATUS)
+        done
+        cat dependencies.txt
+
+        GROUP="org.bytedeco"
+        ARTIFACT=$CI_DEPLOY_MODULE
+        if [[ "$ARTIFACT" == "." ]]; then
+            ARTIFACT=javacpp
+        fi
+        if [[ -n $FILE && -d $ARTIFACT/$FILE ]]; then
+            ARTIFACT=$ARTIFACT-$FILE
+        fi
+        for LINE in $(sed s/:compile//g dependencies.txt | sort -u); do
+            if [[ $LINE =~ $GROUP:$ARTIFACT:jar:([^[:space:]]*) ]]; then
+                VERSION=${BASH_REMATCH[1]}
+                FILES=
+                TYPES=
+                CLASSIFIERS=
+                for LINE2 in $(sort -u dependencies.txt); do
+                    if [[ $LINE2 =~ $GROUP:$ARTIFACT:jar:([^:]*):$VERSION ]]; then
+                        CLASSIFIER=${BASH_REMATCH[1]}
+                        FILE=$ARTIFACT-$VERSION-$CLASSIFIER.jar
+                        mv -v $HOME/.m2/repository/${GROUP//.//}/$ARTIFACT/$VERSION/$FILE .
+                        [[ -n $FILES ]] && FILES=$FILES,$FILE || FILES=$FILE
+                        [[ -n $TYPES ]] && TYPES=$TYPES,jar || TYPES=jar
+                        [[ -n $CLASSIFIERS ]] && CLASSIFIERS=$CLASSIFIERS,$CLASSIFIER || CLASSIFIERS=$CLASSIFIER
+                    fi
+                done
+                if [[ -n $FILES ]]; then
+                    FILE=$ARTIFACT-$VERSION.jar
+                    mv -v $HOME/.m2/repository/${GROUP//.//}/$ARTIFACT/$VERSION/$FILE .
+                    unzip -o $FILE META-INF/maven/$GROUP/$ARTIFACT/pom.xml
+                    for i in {1..5}; do
+                        STATUS=0
+                        mvn $DEPLOY_FILE_OPTIONS $MAVEN_OPTIONS -DpomFile=META-INF/maven/$GROUP/$ARTIFACT/pom.xml \
+                            -Dfile=$FILE -DgroupId=$GROUP -DartifactId=$ARTIFACT -Dversion=$VERSION -Dfiles=$FILES -Dtypes=$TYPES -Dclassifiers=$CLASSIFIERS && break || STATUS=$? && sleep 60
+                    done
+                    (exit $STATUS)
+                fi
+            fi
+        done
+        if [[ -n $UPLOAD_URL ]]; then
+            rm -f $(find redeploy -name *.asc.*)
+            pushd redeploy; zip -r ../$ARTIFACT-platform.zip *; popd
+            curl --request POST --header "Authorization: Bearer $(echo $CI_DEPLOY_USERNAME:$CI_DEPLOY_PASSWORD | base64)" --form bundle=@$ARTIFACT-platform.zip $UPLOAD_URL
+        fi
+        df -h
+
+#    - name: Save cache
+#      shell: bash
+#      run: |
+#        cd $HOME
+#        # Prevent all this from getting cached by the CI server
+#        rm -Rf $(find .m2/repository/ -name '*SNAPSHOT*')
+#        node cache.ts save

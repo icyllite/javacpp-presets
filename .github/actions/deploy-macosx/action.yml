@@ -1,0 +1,172 @@
+name: Deploy on Mac OS X
+runs:
+  using: composite
+  steps:
+    - name: Install environment
+      shell: bash
+      env:
+        GITHUB_EVENT_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        cd $HOME
+        mkdir -p .ccache
+        echo "max_size = 2.0G"                                                                        > .ccache/ccache.conf
+        echo "hash_dir = false"                                                                      >> .ccache/ccache.conf
+        echo "sloppiness = file_macro,include_file_ctime,include_file_mtime,pch_defines,time_macros" >> .ccache/ccache.conf
+
+        # export MACOSX_DEPLOYMENT_TARGET=10.15
+        # echo "MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET" >> $GITHUB_ENV
+
+        echo Removing broken stuff from Mono
+        sudo rm -Rf /Library/Frameworks/Mono.framework
+
+        if [[ "$CI_DEPLOY_PLATFORM" == "macosx-arm64" ]]; then
+          echo Removing old SDKs without ARM support
+          sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/MacOSX10*
+        fi
+
+        brew uninstall --force --ignore-dependencies cmake gcc gcc@7 gcc@8 gcc@9 gcc@10 gcc@11 gcc@12 gcc@13 gcc@14 gcc@15 gcc@16 little-cms2 maven openblas r
+        brew install --overwrite boost ccache swig autoconf-archive automake libomp libtool libusb ant nasm xz pkg-config sdl2 gpg1 bison flex perl ragel binutils gradle gmp isl libmpc mpfr pcre ssdeep yajl ninja meson pkgconf
+
+        FORMULAE=()
+        if [[ -n ${CI_DEPLOY_NEED_GCC:-} ]]; then
+          echo Installing an older less buggy version of GCC
+          brew install gcc@13
+          brew link --overwrite gcc@13
+          echo Removing "fixed" header files that are actually broken
+          rm -Rf $(find /opt/homebrew/Cellar/gcc@13/ -iname include-fixed)
+          FORMULAE+="gcc@13"
+        else
+          brew link --force libomp
+        fi
+
+        # Change rpath and resign all brew libraries that could be bundled in presets
+        FORMULAE+=("libomp" "sdl2" "libusb")
+        for i in $FORMULAE; do
+          for l in $(brew ls $i|grep -e ".dylib$"); do
+            if [ ! -L $l ]; then
+              install_name_tool -add_rpath @loader_path/. -id @rpath/$(basename $l) $l
+              codesign --force -s - $l
+            fi
+          done
+        done
+
+        curl -LO https://repo1.maven.org/maven2/org/apache/maven/apache-maven/3.9.6/apache-maven-3.9.6-bin.tar.gz
+        sudo mkdir -p /usr/local/opt
+        sudo tar -xzf apache-maven-3.9.6-bin.tar.gz -C /usr/local/opt
+        sudo ln -sf /usr/local/opt/apache-maven-3.9.6/bin/mvn /usr/local/bin/mvn
+
+        echo Installing an older less buggy version of CMake
+        curl -LO https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8-macos-universal.tar.gz
+        sudo tar -xzf cmake-3.31.8-macos-universal.tar.gz -C /usr/local/opt
+        sudo ln -sf /usr/local/opt/cmake-3.31.8-macos-universal/CMake.app/Contents/bin/* /usr/local/bin/
+
+        PIP_BREAK_SYSTEM_PACKAGES=1 python3 -m pip install gdown || python3 -m pip install gdown
+
+        # Install vulkan sdk
+        echo Installing Vulkan SDK
+        curl -LO https://sdk.lunarg.com/sdk/download/1.4.313.1/mac/vulkansdk-macos-1.4.313.1.zip
+        unzip vulkansdk-macos-1.4.313.1.zip
+        sudo ./vulkansdk-macOS-1.4.313.1.app/Contents/MacOS/vulkansdk-macOS-1.4.313.1 --root ~/VulkanSDK/1.4.313.1 --accept-licenses --default-answer --confirm-command install com.lunarg.vulkan.core com.lunarg.vulkan.usr com.lunarg.vulkan.sdl2 com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma
+
+        if [[ -n ${CI_DEPLOY_NEED_BAZEL:-} ]]; then
+          echo Installing Bazel
+          curl -LO https://github.com/bazelbuild/bazel/releases/download/0.25.3/bazel-0.25.3-installer-darwin-x86_64.sh
+          sudo bash bazel-0.25.3-installer-darwin-x86_64.sh
+        fi
+
+        if [[ "$CI_DEPLOY_MODULE" == "mkl" ]]; then
+          echo Installing MKL
+          curl -LO https://registrationcenter-download.intel.com/akdlm/IRC_NAS/087a9190-9d96-4b8c-bd2f-79159572ed89/m_onemkl_p_2023.1.0.43558_offline.dmg
+          hdiutil mount m_onemkl_p_2023.1.0.43558_offline.dmg
+          sudo /Volumes/m_onemkl_p_2023.1.0.43558_offline/bootstrapper.app/Contents/MacOS/install.sh -s -a -s --eula accept
+        fi
+
+        GRADLE_TASK=publishToMavenLocal
+        MAVEN_PHASE=install
+        if [[ -n ${CI_DEPLOY_USERNAME:-} ]] && [[ ! "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+          GRADLE_TASK=publish
+          MAVEN_PHASE=deploy
+          if [[ "$GITHUB_EVENT_HEAD_COMMIT_MESSAGE" == Release* ]] || [[ "${GITHUB_REF#refs/heads/}" == "release" ]]; then
+            python3 -m gdown -q -O settings.tar.gz $CI_DEPLOY_SETTINGS
+            tar -xzf settings.tar.gz
+            MAVEN_OPTIONS="$MAVEN_OPTIONS -Dgpg.homedir=$(pwd)/.gnupg/ -DperformRelease -DstagingRepositoryId=$STAGING_REPOSITORY"
+          fi
+        fi
+        echo "GPG_PASSPHRASE=***" >> $GITHUB_ENV
+        echo "GRADLE_TASK=$GRADLE_TASK" >> $GITHUB_ENV
+        echo "MAVEN_PHASE=$MAVEN_PHASE" >> $GITHUB_ENV
+        echo "MAVEN_OPTIONS=$MAVEN_OPTIONS" >> $GITHUB_ENV
+
+    - name: Build project
+      shell: bash
+      run: |
+        if [[ -n ${CI_DEPLOY_NEED_GCC:-} ]]; then
+          export LIBRARY_PATH="$(brew --prefix)/lib/gcc/13/"
+          export LD_LIBRARY_PATH="$LIBRARY_PATH"
+          export DYLD_LIBRARY_PATH="$LIBRARY_PATH"
+          export DYLD_FALLBACK_LIBRARY_PATH="$LIBRARY_PATH"
+          otool -L $(brew ls gcc@13|grep -e ".dylib$");
+        fi
+
+        # Change default JVM on macos-14 runner
+        if [[ -n ${JAVA_HOME_11_arm64:-} ]]; then
+          export JAVA_HOME=$JAVA_HOME_11_arm64
+        else
+          export JAVA_HOME=$JAVA_HOME_11_X64
+        fi
+
+        git --version
+        clang --version
+        /opt/homebrew/bin/gcc-* --version || true
+        /usr/local/bin/gcc-* --version || true
+        cmake --version
+        meson --version
+        ninja --version
+        gradle --version
+        mvn -version
+        gpg --version
+        python3 --version
+        ccache -s --version
+        df -h
+
+        export MAKEJ=$(getconf _NPROCESSORS_ONLN)
+        echo Fetching $GITHUB_REPOSITORY@$GITHUB_SHA
+        git init
+        git fetch --depth 1 https://github.com/$GITHUB_REPOSITORY $GITHUB_SHA
+        git checkout $GITHUB_SHA
+        git submodule update --init --recursive
+        git submodule foreach --recursive 'git reset --hard'
+
+        if [[ -n ${CI_DEPLOY_NEED_GRADLE:-} ]]; then
+          echo Executing Gradle $GRADLE_TASK ${{ matrix.options }} $CI_DEPLOY_OPTIONS on $MAKEJ processors
+          export GRADLE_OPTIONS="-Dorg.gradle.jvmargs=-Xmx2048m -PjavacppPlatform=$CI_DEPLOY_PLATFORM -PjavacppPlatformExtension=${{ matrix.ext }} ${{ matrix.options }} $CI_DEPLOY_OPTIONS --info"
+          gradle clean build $GRADLE_OPTIONS -b $CI_DEPLOY_MODULE/build.gradle
+          echo Publishing only now to help avoid race conditions with Gradle
+          gradle $GRADLE_TASK $GRADLE_OPTIONS -b $CI_DEPLOY_MODULE/build.gradle --refresh-dependencies
+        else
+          mkdir -p $HOME/.m2
+          echo "<settings><servers>" > $HOME/.m2/settings.xml
+          echo "<server><id>central</id><username>$CI_DEPLOY_USERNAME</username><password>$CI_DEPLOY_PASSWORD</password></server>" >> $HOME/.m2/settings.xml
+          echo "<server><id>central-portal-staging</id><configuration><httpHeaders><property><name>Authorization</name>" >> $HOME/.m2/settings.xml
+          echo "<value>Bearer $(echo $CI_DEPLOY_USERNAME:$CI_DEPLOY_PASSWORD | base64)</value></property></httpHeaders></configuration></server>" >> $HOME/.m2/settings.xml
+          echo "</servers></settings>" >> $HOME/.m2/settings.xml
+
+          SECONDS=$(( RANDOM % 300 ))
+          echo Sleeping $SECONDS seconds to help avoid race conditions with Maven
+          sleep $SECONDS
+
+          echo Executing Maven $MAVEN_PHASE $CI_DEPLOY_OPTIONS on $MAKEJ processors
+          export EXT=${{ matrix.ext }}
+          export FILE=${{ matrix.file }}
+          export PROFILE=${{ matrix.profile }}
+          export MAVEN_OPTS="-Xss2m -Xmx4g"
+          export MAVEN_OPTIONS="clean $MAVEN_PHASE clean -B -U -e -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.count=3 -Djavacpp.platform=$CI_DEPLOY_PLATFORM -Djavacpp.platform.extension=$EXT $MAVEN_OPTIONS $CI_DEPLOY_OPTIONS"
+          for i in {1..5}; do STATUS=0; mvn $MAVEN_OPTIONS -f=$CI_DEPLOY_MODULE/$FILE -P=$PROFILE && break || STATUS=$? && sleep 60; done; (exit $STATUS)
+        fi
+        df -h
+
+    - name: Clean up
+      shell: bash
+      run: |
+        cd $HOME
+        rm -Rf $(find .m2/repository/ -name '*SNAPSHOT*')

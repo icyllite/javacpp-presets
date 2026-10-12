@@ -1,0 +1,34 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>org.bytedeco.tensorrt</groupId>
+    <artifactId>sampleonnxmnist</artifactId>
+    <version>1.5.15-SNAPSHOT</version>
+    <properties>
+        <exec.mainClass>SampleOnnxMNIST</exec.mainClass>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>tensorrt-platform</artifactId>
+            <version>11.3-1.5.15-SNAPSHOT</version>
+        </dependency>
+
+        <!-- Additional dependencies to use bundled CUDA, cuDNN, NCCL, and TensorRT -->
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>cuda-platform-redist-cudnn</artifactId>
+            <version>13.4-9.26-1.5.15-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>tensorrt-platform-redist</artifactId>
+            <version>11.3-1.5.15-SNAPSHOT</version>
+        </dependency>
+
+    </dependencies>
+    <build>
+        <sourceDirectory>.</sourceDirectory>
+    </build>
+</project>

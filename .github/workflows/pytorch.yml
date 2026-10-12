@@ -1,0 +1,89 @@
+name: pytorch
+on:
+  push:
+    paths:
+      - pytorch/**
+      - .github/workflows/pytorch.yml
+  pull_request:
+    paths:
+      - pytorch/**
+      - .github/workflows/pytorch.yml
+  workflow_dispatch:
+env:
+  CI_DEPLOY_NEED_CACHE: 1
+  CI_DEPLOY_NEED_CUDA: 1
+  CI_DEPLOY_MODULE: ${{ github.workflow }}
+  CI_DEPLOY_PLATFORM: ${{ github.job }}
+  CI_DEPLOY_SETTINGS: ${{ secrets.CI_DEPLOY_SETTINGS }}
+  CI_DEPLOY_USERNAME: ${{ secrets.CI_DEPLOY_USERNAME }}
+  CI_DEPLOY_PASSWORD: ${{ secrets.CI_DEPLOY_PASSWORD }}
+  STAGING_REPOSITORY: ${{ secrets.STAGING_REPOSITORY }}
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        ext: ["", -gpu]
+    steps:
+      - uses: bytedeco/cache@always
+        with:
+          key: ${{ github.workflow }}-${{ github.job }}${{ matrix.ext }}@${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ github.workflow }}-${{ github.job }}${{ matrix.ext }}@
+          path: /home/runner/.ccache
+      - uses: bytedeco/javacpp-presets/.github/actions/deploy-ubuntu@actions
+        timeout-minutes: 350
+      - name: Sleep 60 seconds to avoid cache errors
+        run: sleep 60
+        if: always()
+  macosx-arm64:
+    runs-on: macos-15
+    steps:
+      - uses: bytedeco/javacpp-presets/.github/actions/deploy-macosx@actions
+  macosx-x86_64:
+    runs-on: macos-15-intel
+#    strategy:
+#      matrix:
+#        ext: ["", -gpu]
+    steps:
+      - uses: bytedeco/javacpp-presets/.github/actions/deploy-macosx@actions
+  windows-x86_64:
+    runs-on: windows-2022
+    strategy:
+      matrix:
+        ext: ["", -gpu]
+    env:
+        BUILD_DIR: D:\build
+        CI_DEPLOY_OPTIONS: -Djavacpp.parser.skip
+        TEMP: D:\temp
+        TMP: D:\temp
+    steps:
+      - uses: al-cheb/configure-pagefile-action@v1.3
+        with:
+          minimum-size: 32GB
+          maximum-size: 64GB
+          disk-root: "D:"
+      - uses: bytedeco/cache@always
+        with:
+          key: ${{ github.workflow }}-${{ github.job }}${{ matrix.ext }}@${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ github.workflow }}-${{ github.job }}${{ matrix.ext }}@
+          path: ~/ccache/?
+      - uses: bytedeco/javacpp-presets/.github/actions/deploy-windows@actions
+        timeout-minutes: 350
+      - name: Sleep 60 seconds to avoid cache errors
+        continue-on-error: true
+        run: |
+          taskkill /IM python.exe /F /T
+          taskkill /IM cmake.exe /F /T
+          taskkill /IM ninja.exe /F /T
+          taskkill /IM ccache.exe /F /T
+          taskkill /IM nvcc.exe /F /T
+          taskkill /IM ptxas.exe /F /T
+          taskkill /IM cicc.exe /F /T
+          taskkill /IM cl.exe /F /T
+          sleep 60
+        if: always()
+  platform:
+    needs: [linux-x86_64, macosx-arm64, macosx-x86_64, windows-x86_64]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: bytedeco/javacpp-presets/.github/actions/redeploy@actions
